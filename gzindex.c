@@ -207,6 +207,7 @@ local int inflate_index(FILE *gz, off_t offset, struct point **index,
     unsigned char *out, *out2;
     z_stream strm;
     unsigned char in[16384];
+size_t input_stride = sizeof(in);
 
     /* position input file */
     ret = fseeko(gz, offset, SEEK_SET);
@@ -273,7 +274,7 @@ local int inflate_index(FILE *gz, off_t offset, struct point **index,
         do {
             /* if needed, get more input data */
             if (strm.avail_in == 0) {
-                strm.avail_in = fread(in, 1, sizeof(in), gz);
+                strm.avail_in = fread(in, 1, input_stride, gz);
                 if (ferror(gz)) {
                     (void)inflateEnd(&strm);
                     free(list);
@@ -304,6 +305,12 @@ local int inflate_index(FILE *gz, off_t offset, struct point **index,
 
             /* if at a block boundary, note the location of the header */
             if (strm.data_type & 128) {
+            size_t out_alignment = (pos - strm.avail_in) & 7;
+            if (out_alignment) {
+                input_stride = 1;
+            } else {
+                input_stride = sizeof(in);
+            }
                 head = ((pos - strm.avail_in) << 3) - (strm.data_type & 63);
                 last = strm.data_type & 64; /* true at end of last block */
             }
